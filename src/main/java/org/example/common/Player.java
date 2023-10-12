@@ -7,6 +7,7 @@ public class Player implements Serializable {
     private String username;
     private char sign; // 'x' or 'o'
     private boolean myTurn;
+    private double rank;
 
     // getters
 
@@ -16,6 +17,10 @@ public class Player implements Serializable {
 
     public char getSign() {
         return sign;
+    }
+
+    public double getRank() {
+        return rank;
     }
 
     public boolean isMyTurn() {
@@ -31,6 +36,15 @@ public class Player implements Serializable {
         this.myTurn = myTurn;
     }
 
+    public void setRank() {
+        // Initial
+        this.rank = 1500;
+    }
+
+    public void setRank(double newRank) {
+        this.rank = newRank;
+    }
+
     public void endMyTurn() {
         this.myTurn = false;
     }
@@ -42,10 +56,11 @@ public class Player implements Serializable {
 
     public Player(String username) {
         this.username = username;
+        setRank();
     }
 
     @Override
     public String toString() {
-        return "Player " + username;
+        return "Player " + username + "(" + rank + ")";
     }
 }

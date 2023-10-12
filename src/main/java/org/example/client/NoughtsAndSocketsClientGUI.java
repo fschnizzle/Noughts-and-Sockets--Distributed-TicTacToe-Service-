@@ -15,13 +15,17 @@ public class NoughtsAndSocketsClientGUI {
     private Client client;
     public char sign;
     public boolean isMyTurn;
+    public Player player;
+
+    public Player opponent;
+
+    public boolean gameActive = false;
     private Set<JButton> disabledButtons = new HashSet<>();
-
-
     public JButton[] grid = new JButton[9];
     public Color bgColor = Color.GRAY;
 
     public JTextArea chatArea;
+    public JButton Quit;
     public JTextField chatInput;
     private JLabel timerLabel;
     private JLabel statusHeadLabel;
@@ -34,11 +38,9 @@ public class NoughtsAndSocketsClientGUI {
         init_components();
     }
 
-    public void play(int id) {
-        // Your game logic goes here
+    public void setGameActive(boolean gameActive) {
+        this.gameActive = gameActive;
     }
-
-
 
     public void setMyTurn(boolean myTurn) {
         isMyTurn = myTurn;
@@ -48,14 +50,6 @@ public class NoughtsAndSocketsClientGUI {
             disableBoard();
         }
         updatePlayerStatus();
-    }
-
-    private char getCurrentPlayerSign() {
-        return isMyTurn ? 'X' : 'O';
-    }
-
-    public void updateChatBoard(String message) {
-        chatArea.append(message + "\n");
     }
 
     public void receiveChatMessage(String message) {
@@ -68,26 +62,38 @@ public class NoughtsAndSocketsClientGUI {
         chatInput.setBackground(Color.WHITE);
     }
 
-    public void disableChat() {
-        chatInput.setEnabled(false);
-        chatInput.setBackground(Color.GRAY);
-        chatArea.setBackground(Color.GRAY);
-    }
-
     public void disableGameComponents() {
         for (JButton button : grid) {
             button.setEnabled(false);
             button.setBackground(Color.DARK_GRAY);
         }
         chatInput.setEnabled(false);
-        statusHeadLabel.setText("Finding Opponent...");
+//        statusHeadLabel.setText("Finding Opponent...");
+    }
+
+    public void lostOpponentConnection(boolean lost) {
+        if (lost) {
+            for (JButton button : grid) {
+                button.setEnabled(false);
+                button.setBackground(Color.DARK_GRAY);
+            }
+            chatInput.setEnabled(false);
+            statusHeadLabel.setText("Lost connection to opponent...");
+        } else {
+            for (JButton button : grid) {
+                button.setEnabled(true);
+                button.setBackground(Color.GRAY);
+            }
+            chatInput.setEnabled(true);
+            statusHeadLabel.setText("Connection to opponent returned");
+        }
     }
 
     public void enableBoard() {
         for (JButton button : grid) {
             if (!disabledButtons.contains(button)) {
                 button.setEnabled(true);
-                button.setBackground(Color.GRAY);
+                button.setBackground(bgColor);
             }
         }
         updatePlayerStatus();
@@ -99,27 +105,30 @@ public class NoughtsAndSocketsClientGUI {
         updatePlayerStatus();
     }
 
-    public void startGame(char sign) {
-        this.sign = sign;
+    public void startGame(Player currentPlayer, Player opponentPlayer) {
+        // Set player and opponent player objects
+        this.player = currentPlayer;
+        this.opponent = opponentPlayer;
+        this.sign = currentPlayer.getSign();
+
+        // Reset perma-disabled (selected) grid cell buttons
         disabledButtons.clear();
         for (JButton button : grid) {
             button.setText("");
         }
-        updatePlayerStatus();
+
+        // Enable chat
         enableChat();
+
+        // Give turn permission to 'X' player and update status accordingly
         if (sign == 'X'){
             setMyTurn(true);
         } else{
             setMyTurn(false);
         }
+        updatePlayerStatus();
     }
 
-    public void endGame() {
-        disableGameComponents();
-        enableChat();
-        System.out.println("YOU WIN");
-        statusHeadLabel.setText("Game Over!");
-    }
 
     // Method to check for a winning condition
     public boolean isWinning() {
@@ -163,7 +172,8 @@ public class NoughtsAndSocketsClientGUI {
     }
 
     private void updatePlayerStatus() {
-        String currentPlayerStatus = isMyTurn ? "Your turn (" + sign + ")" : "Opponent's turn (" + (sign == 'X' ? 'O' : 'X') + ")";
+//        String currentPlayerStatus = isMyTurn ? "Your turn (" + sign + ")" : "Opponent's turn (" + (sign == 'X' ? 'O' : 'X') + ")";
+        String currentPlayerStatus = isMyTurn ? "Your Turn (" + player.getSign() + ") - Rank: " + player.getRank()  : opponent.getUsername() + "'s turn  (" + opponent.getSign() + ") - Rank: " + opponent.getRank();
         statusHeadLabel.setText(currentPlayerStatus);
     }
 
@@ -179,19 +189,116 @@ public class NoughtsAndSocketsClientGUI {
         SwingUtilities.invokeLater(() -> {
             // Check for end-game conditions after updating the board
             if (isWinning()) {
-                endGame();
+//                endGame();
                 if (move.getSign() == sign) { // local player win
                     statusHeadLabel.setText("You Win!");
+                    // Update ELO status with local player as winner
+                    //client.sendMessageToServer('W');
+                    handleGameEndSend('W');
+
                 } else { // opponent win
                     statusHeadLabel.setText("Opponent Wins!");
+                    // Update ELO status with opponent as winner
+//                    client.sendMessageToServer('L');
+                    handleGameEndSend('L');
                 }
             } else if (isFull()) {
-                endGame();
+//                endGame();
                 statusHeadLabel.setText("It's a draw!");
+                // Update ELO status with draw outcome
+//                client.sendMessageToServer('D');
+                handleGameEndSend('D');
+
             }
         });
 
     }
+
+    public void handleQuit(){
+        statusHeadLabel.setText("You have forfeited.");
+        client.sendMessageToServer('Q');
+        System.exit(0);
+    }
+
+    public void showQuitDialog() {
+        String[] options = {"QUIT2", "PLAY AGAIN"};
+        int response = JOptionPane.showOptionDialog(null, statusHeadLabel.getText(), "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+
+        if(response == 0) { // QUIT
+            System.exit(0);
+        } else if(response == 1) { // PLAY AGAIN
+//            System.exit(0);
+            // Handle the logic to restart the game or go back to lobby
+        }
+    }
+
+    public void showEndGameDialog(char status) {
+        String[] options = {"QUIT", "PLAY AGAIN"};
+        int response = JOptionPane.showOptionDialog(null, statusHeadLabel.getText(), "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (gameActive) {
+            System.out.println("1");
+            client.sendMessageToServer('Q');
+        } else{
+            System.out.println("2");
+            client.sendMessageToServer(status);
+        }
+
+        // Alter above to show updated rating
+        if (response == 0) { // PLAY AGAIN
+            System.exit(0);
+            // Handle the logic to restart the game or go back to lobby
+        } else if(response == 1) { // QUIT
+            System.exit(0);
+
+        }
+    }
+
+    public void handleOpponentQuit() {
+        statusHeadLabel.setText("Your opponent has quit.");
+        setGameActive(false);
+        showQuitDialog();
+    }
+
+
+    public void handleGameEndReceive(char oppStatus){
+        // Here you have received notification from the server that the game has ended
+//        handleGameEndSend();
+
+        // Handle Dialog case by case (switch) according to opponent game case (ie: opponent wins)
+        String message = "";
+        switch(oppStatus) {
+            case 'W':
+                message = "Opponent Wins!";
+                break;
+            case 'L':
+                message = "You Win!";
+                break;
+            case 'D':
+                message = "It's a draw!";
+                break;
+            case 'Q':
+                message = "Opponent has quit.";
+                break;
+        }
+        statusHeadLabel.setText(message);
+        setGameActive(false);
+
+        // Await response (updates etc)
+        showQuitDialog();
+    }
+
+    public void handleGameEndSend(char Status){
+        // Disable all features
+        disableGameComponents();
+        Quit.setEnabled(false);
+
+        // Show quit popup
+        setGameActive(false);
+        showEndGameDialog(Status);
+//        setGameActive(false);
+    }
+
+
 
     private void initBoard(JPanel Board) {
         Board.setLayout(new GridLayout(3, 3));
@@ -240,7 +347,7 @@ public class NoughtsAndSocketsClientGUI {
         frame.add(timerLabel, gbc);
 
         // Status / Turn Info Panel
-        statusHeadLabel = new JLabel("Waiting for an opponent to join", SwingConstants.CENTER);
+        statusHeadLabel = new JLabel("Finding opponent...", SwingConstants.CENTER);
         gbc.gridx = 1;
         gbc.gridy = 0;
         frame.add(statusHeadLabel, gbc);
@@ -279,8 +386,9 @@ public class NoughtsAndSocketsClientGUI {
         frame.add(chatScrollPane, gbc);
 
         // Quit Button
-        JButton Quit = new JButton("Quit");
-        Quit.addActionListener(e -> System.exit(0));
+        Quit = new JButton("Quit");
+//        Quit.addActionListener(e -> System.exit(0));
+        Quit.addActionListener(e -> handleQuit());
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridheight = 1;
@@ -307,4 +415,7 @@ public class NoughtsAndSocketsClientGUI {
         frame.setVisible(true);
         frame.setLocationRelativeTo(null);
     }
+
 }
+
+

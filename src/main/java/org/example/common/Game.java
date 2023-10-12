@@ -1,6 +1,7 @@
 package org.example.common;
 
 import java.io.ObjectOutputStream;
+import java.util.List;
 
 public class Game {
     private final Player player1;
@@ -46,6 +47,25 @@ public class Game {
 
     public Player getPlayer2() {
         return player2;
+    }
+
+    public void updatePlayerStream(Player player, ObjectOutputStream newStream) {
+        if (player1.getUsername().equals(player.getUsername())) {
+            player1Stream = newStream;
+        } else if (player2.getUsername().equals(player.getUsername())) {
+            player2Stream = newStream;
+        } else {
+            System.err.println("Player not found in this game.");
+        }
+    }
+
+    public boolean containsPlayer(Player player) {
+        return player1.getUsername().equals(player.getUsername()) ||
+                player2.getUsername().equals(player.getUsername());
+    }
+
+    public boolean containsPlayers(List<Player> players) {
+        return players.stream().allMatch(this::containsPlayer);
     }
 
     // Method to place a move on the board

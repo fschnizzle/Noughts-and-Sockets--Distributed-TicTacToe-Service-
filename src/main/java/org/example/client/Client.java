@@ -39,69 +39,84 @@ public class Client {
             out = new ObjectOutputStream(socket.getOutputStream());
             in = new ObjectInputStream(socket.getInputStream());
 
-            Player player = new Player(username);
-            out.writeObject(player);
-            out.flush();
+            // Creates a new Player object and writes it to the server
+            sendInitialPlayerData();
 
-            reconnectionAttempts = 0; // Reset reconnection attempts when connection is successful
+            // Continuously listen out for new data packets
+            listenToServer();
 
-            // Rest of the code...
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(null, "Unable to connect to server. Please try again later.", "Connection Error", JOptionPane.ERROR_MESSAGE);
+            System.out.println("Unable to connect to server. Please try again later. Connection Error");
             e.printStackTrace();
         }
+    }
+
+    private void sendInitialPlayerData() throws IOException {
+        Player player = new Player(username);
+        out.writeObject(player);
+        out.flush();
+        reconnectionAttempts = 0;  // Reset reconnection attempts when connection is successful
     }
 
     private void listenToServer() {
         new Thread(() -> {
             try {
-                while (true) {
-                    Object obj = in.readObject();
-                    if (obj instanceof String && obj.equals("MATCHED")) {
-//                        SwingUtilities.invokeLater(() -> {
-//                            gui.enableChat();
-//                        });
-                    } else if (obj instanceof String) {
-                        String message = (String) obj;
-                        gui.receiveChatMessage(message);
-                    } else if (obj instanceof Move) {
-                        // Handle move logic
-                        // E.g., update the GUI based on the move received
-                        System.out.println("GOT A MOVE!");
-                        Move receivedMove = (Move) obj;
-                        SwingUtilities.invokeLater(() -> {
-                            gui.updateBoard(receivedMove); // Update the opponent's move on the board
-                            gui.setMyTurn(true);          // Since the opponent has made a move, now it's this client's turn
-                        });
-                    } else if (obj instanceof Player) {
-                        // Player object passed at start of new game
-                        Player updatedPlayer = (Player) obj;
-                        String username = updatedPlayer.getUsername();
-                        char sign = updatedPlayer.getSign();
-                        System.out.println("You are: " + username);
-                        System.out.println("Sign: " + sign);
-
-                        // Set turn appropriately
-                        SwingUtilities.invokeLater(() -> {
-                            gui.startGame(sign);
-                        });
-                    }
-                    // handle the object
-                }
+                processServerMessages();
             } catch (EOFException e) {
-                System.out.println("Lost connection to server.");
-                attemptReconnection();
-                e.printStackTrace();
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Error communicating with server.");
-                e.printStackTrace();
+                handleConnectionLoss();
             } catch (Exception e) {
-                System.out.println("An unexpected error occurred.");
-                e.printStackTrace();
+                displayGenericError();
             }
         }).start();
     }
 
+
+    private void displayGenericError() {
+        System.out.println("UNKNOWN GENERIC ISSUE OCCURRED");
+    }
+
+    private void processServerMessages() throws IOException, ClassNotFoundException {
+        Player updatedPlayer = null;
+        Player opponentPlayer = null;
+        while (true) {
+            Object obj = in.readObject();
+
+            if (obj instanceof String) {
+                switch ((String) obj) {
+                    case "OPPONENT_QUIT":
+                        gui.setGameActive(false);
+                        gui.handleGameEndReceive('L');
+                        break;
+                    default:
+                        gui.receiveChatMessage((String) obj);
+                }
+            } else if (obj instanceof Character && obj.equals('0')) {
+                gui.handleOpponentQuit();
+//                sendMessageToServer((Character) obj);
+            } else if (obj instanceof Move) {
+                processMove((Move) obj);
+            } else if (obj instanceof Player) {
+                if (updatedPlayer == null) {
+                    updatedPlayer = (Player) obj;
+                } else {
+                    opponentPlayer = (Player) obj;
+                    gui.startGame(updatedPlayer, opponentPlayer);
+                }
+            }
+        }
+    }
+
+    private void processMove(Move move) {
+        SwingUtilities.invokeLater(() -> {
+            gui.updateBoard(move);
+            gui.setMyTurn(true);
+        });
+    }
+
+    private void handleConnectionLoss() {
+        gui.lostOpponentConnection(true);
+        attemptReconnection();
+    }
     private void attemptReconnection() {
         if (reconnectionAttempts < MAX_RECONNECTION_ATTEMPTS) {
             reconnectionAttempts++;
@@ -119,17 +134,19 @@ public class Client {
         }
     }
 
-
     public void sendMoveToServer(Move move) {
-        try {
-            out.writeObject(move);
-            out.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        sendToServer(move);
     }
 
     public void sendChatMessageToServer(String message) {
+        sendToServer(message);
+    }
+
+    public void sendMessageToServer(char message) {
+        sendToServer(message);
+    }
+
+    private void sendToServer(Object message) {
         try {
             out.writeObject(message);
             out.flush();
@@ -155,7 +172,6 @@ public class Client {
             // Get added to player lobby queue
             Client client = new Client(hostname, serverPort, username);
             client.connectToServer();
-            client.listenToServer();
 
         } catch (Exception e) {
             e.printStackTrace();
