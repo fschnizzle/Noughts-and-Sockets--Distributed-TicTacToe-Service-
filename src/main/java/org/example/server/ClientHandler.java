@@ -77,13 +77,15 @@ public class ClientHandler implements Runnable {
                 lobby.reconnectPlayerToGame(playerSession, opponent);
                 //lobby.removeFromLobbyQueue(playerSession);
             }
-        } else if (lobby.getPlayerRanking(player.getUsername()) != 1500) { // Returning player (not in current game) (ie: new game)
+        }
+        else if (lobby.getPlayerRanking(player.getUsername()) != 1500) { // Returning player (not in current game) (ie: new game)
             player.setRank(lobby.getPlayerRanking(player.getUsername()));
             System.out.println("Client " + player.getUsername() + " (" + lobby.getPlayerRanking(player.getUsername()) + ") joins lobby");
             PlayerSession playerSession = new PlayerSession(player, out);
             lobby.addToLobbyQueue(playerSession);
             lobby.matchPlayers();
-        } else { // New player joins server
+        }
+        else { // New player joins server
             System.out.println("Client " + player.getUsername() + " (" + lobby.getPlayerRanking(player.getUsername()) + ") joins lobby");
             PlayerSession playerSession = new PlayerSession(player, out);
             lobby.addToLobbyQueue(playerSession);
@@ -146,31 +148,49 @@ public class ClientHandler implements Runnable {
             gameRoom.switchCurrentPlayer();
         }
     }
+    private void handleCharacterMessage(Character status, Game game, Player player) {
+        System.out.println("handling character message for: " + player.getUsername());
 
-    private void handleCharacterMessage(Character message, Game gameRoom, Player player) {
+        Player p1, p2;
 
-        // Only P1 handles the rank updating etc, assumes the message applies to them
-        if (gameRoom.getPlayer1().equals(player)){
-            switch (message) {
-                case 'Q':
-                    System.out.println(player.getUsername() + " has quit the game.");
-                    notifyOtherPlayerOfQuit(getOpponentFromGame(player), player, gameRoom);
-                    handleGameEnd(getOpponentFromGame(player), player, gameRoom, false, true);
-                    break;
-                case 'W':
-                    handleGameEnd(gameRoom.getPlayer1(), gameRoom.getPlayer2(), gameRoom, false, false);
-                    break;
-                case 'L':
-                    handleGameEnd(gameRoom.getPlayer2(), gameRoom.getPlayer1(), gameRoom, false, false);
-                    break;
-                case 'D':
-                    handleGameEnd(gameRoom.getPlayer2(), gameRoom.getPlayer1(), gameRoom, true, false);
-                    break;
-                default:
-                    System.out.println("Not a valid instruction: " + message);
+        // Set p1 and p2 players accordingly
+        // p1 is always PLAYER, p2 is always OPPONENT
+        if (game.getPlayer1().equals(player)) {
+            p1 = game.getPlayer1();
+            p2 = game.getPlayer2();
+        }
+        else if (game.getPlayer2().equals(player)) {
+            p1 = game.getPlayer2();
+            p2 = game.getPlayer1();
+        }
+        else {
+            System.out.println("WHAT");
+            return; // If the player isn't Player1 or Player2 in the game room, we return.
+        }
+
+        // Handle Game End processes
+        if (!game.isProcessed) {
+            handleGameEnd(p1, p2, game, status, true);
+//            switch (status) {
+//                case 'Q':
+//                    handleGameEnd(p1, p2, game, status, true);
+//                    break;
+//                case 'W':
+//                    handleGameEnd(p1, p2, game, status, false);
+//                    break;
+//                case 'L':
+//                    handleGameEnd(p2, p1, game, status, false);
+//                    break;
+//                case 'D':
+//                    handleGameEnd(p2, p1, game, status, false);
+//                    break;
+//                case '0':
+//                    System.out.println("HERE2");
+//                    break;
+//                default:
+//                    System.out.println("Not a valid instruction: " + status);
             }
         }
-    }
 
     private void closeConnection() {
         try {
@@ -188,18 +208,53 @@ public class ClientHandler implements Runnable {
             ioException.printStackTrace();
         }
     }
-    private void notifyOtherPlayerOfQuit(Player winner, Player quitter, Game gameRoom) {
+
+    private void notifyOtherPlayerOfStatus(Player opponent, Game gameRoom, char status) {
         try {
-            if (winner != null) {
-                ObjectOutputStream winnerStream = (winner.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer1Stream() : gameRoom.getPlayer2Stream();
+            System.out.println("Notifying status (from CH -> C), opponent: " + opponent.getUsername());
+
+            if (opponent != null) {
+                ObjectOutputStream oppStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer1Stream() : gameRoom.getPlayer2Stream();
+
+                if (oppStream != null) {
+                    oppStream.writeObject(status); // Sending specific message to the client
+                    oppStream.flush();
+                }
+            }
+        } catch (SocketException se) {
+            // Not critical
+            try {
+                ObjectOutputStream loserStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream();
+                loserStream.writeObject('0');
+                System.out.println("sent");
+            } catch(Exception e){
+                System.out.println("Failed to notify " + (opponent != null ? opponent.getUsername() : "the opponent") + ". They have already disconnected.");
+            }
+        } catch (IOException e) {
+            System.out.println("Failed to notify the opponent due to some IO issue.");
+            e.printStackTrace();
+        }
+    }
+
+    private void notifyOtherPlayerOfQuit(Player opponent, Player quitter, Game gameRoom) {
+        try {
+            if (opponent != null) {
+                ObjectOutputStream winnerStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer1Stream() : gameRoom.getPlayer2Stream();
+
                 if (winnerStream != null) {
-                    winnerStream.writeObject('0'); // Sending specific message to the client
+                    winnerStream.writeObject("OPPONENT_QUIT"); // Sending specific message to the client
                     winnerStream.flush();
                 }
             }
         } catch (SocketException se) {
             // Not critical
-            System.out.println("Failed to notify " + (winner != null ? winner.getUsername() : "the opponent") + ". They have already disconnected.");
+            try {
+                ObjectOutputStream loserStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream();
+                loserStream.writeObject('0');
+                System.out.println("sent");
+            } catch(Exception e){
+                System.out.println("Failed to notify " + (opponent != null ? opponent.getUsername() : "the opponent") + ". They have already disconnected.");
+            }
         } catch (IOException e) {
             System.out.println("Failed to notify the opponent due to some IO issue.");
             e.printStackTrace();
@@ -223,22 +278,37 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void handleGameEnd(Player winner, Player loser, Game gameRoom, boolean isDraw, boolean isQuit) {
-        // Update Rankings
-        // updatePlayerRankings(winner, loser, false);
-        if (isDraw) { // Draw
-            updatePlayerRankings(winner, loser, true);
-        } else { // Win or Lose
-            updatePlayerRankings(winner, loser, false);
+    private void handleGameEnd(Player p1, Player p2, Game game, char status, boolean isQuit) {
+        // Updates player rankings with: (winner, loser, isDraw)
+        System.out.println("handling CH game end for: " + p1.getUsername());
+        // p1 = player
+        // p2 = opponent
+        switch (status) {
+            case 'W':
+                // Player 1 wins, Player 2 loses
+                updatePlayerRankings(p1, p2, false);
+                break;
+            case 'L':
+            case 'Q':
+                // Player 1 loses, Player 2 wins
+                updatePlayerRankings(p2, p1, false);
+                break;
+            case 'D':
+                // It's a draw, so there's no winner or loser
+                updatePlayerRankings(p1, p2, true);
+                break;
         }
 
-        // Alert the winner
-//        if (!isQuit) {
-        notifyOtherPlayerOfQuit(winner, loser, gameRoom);
-        // Remove game from activeGames
-        lobby.removeGame(winner, loser);
-//        }
+        // Update isProcessed to avoid repeating
+        game.isProcessed = true;
+
+        // Alert the other player about the status change
+        notifyOtherPlayerOfStatus(p2, game, status);
+
+        // Remove the game from activeGames (assuming you have a lobby instance and a method removeGame)
+        lobby.removeGame(p1, p2);
     }
+
 
     // Ranking Methods
     private double calculateElo(double currentRank, double opponentRank, double result) {
@@ -268,13 +338,8 @@ public class ClientHandler implements Runnable {
 
         // Update Player Object
         player.setRank(rank);
-//        System.out.println("Player object:");
-//        System.out.println(username + " " + player.getRank());
-
-        // Update in lobby
         Double oldRank = lobby.getPlayerRanking(username);
         lobby.updatePlayerRankings(username, rank);
-//        System.out.println("Lobby structure:");
         System.out.println(username + " " + oldRank + " -> " + lobby.getPlayerRanking(username));
     }
     private void sendChatMessageToBothPlayers(String message, Game gameRoom, Player sender) throws IOException {

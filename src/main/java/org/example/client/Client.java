@@ -63,8 +63,10 @@ public class Client {
             try {
                 processServerMessages();
             } catch (EOFException e) {
-                handleConnectionLoss();
+                System.out.println("EOFException 66");
+//                handleConnectionLoss();
             } catch (Exception e) {
+                System.out.println("Other 69");
                 displayGenericError();
             }
         }).start();
@@ -84,15 +86,35 @@ public class Client {
             if (obj instanceof String) {
                 switch ((String) obj) {
                     case "OPPONENT_QUIT":
-                        gui.setGameActive(false);
-                        gui.handleGameEndReceive('L');
+                        System.out.println("receive");
+                        gui.handleGameEndReceive('Q');
+//                        gui.setGameActive(false);
+//                        System.out.println("opp quit");
+//                        gui.handleGameEndReceive('0');
                         break;
+
                     default:
                         gui.receiveChatMessage((String) obj);
                 }
-            } else if (obj instanceof Character && obj.equals('0')) {
-                gui.handleOpponentQuit();
-//                sendMessageToServer((Character) obj);
+            }
+            else if (obj instanceof Character) {
+                System.out.println(updatedPlayer.getUsername() + " received " + obj);
+                switch ((Character) obj) {
+                    case 'Q':
+                        gui.handleGameEndReceive('Q');
+                        break;
+                    case 'W':
+                        gui.handleGameEndReceive('W');
+                        break;
+                    case 'L':
+                        gui.handleGameEndReceive('L');
+                        break;
+                    case 'D':
+                        gui.handleGameEndReceive('D');
+                        break;
+                    default:
+                        System.out.println(obj);
+                }
             } else if (obj instanceof Move) {
                 processMove((Move) obj);
             } else if (obj instanceof Player) {

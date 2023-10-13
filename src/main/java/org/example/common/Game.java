@@ -11,6 +11,8 @@ public class Game {
     private char[][] board = new char[3][3]; // Represents the Tic Tac Toe board
     private char currentPlayer = 'X'; // X Starts
 
+    public boolean isProcessed;
+
     public Game(PlayerSession session1, PlayerSession session2) {
         this.player1 = session1.getPlayer();
         this.player2 = session2.getPlayer();

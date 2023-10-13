@@ -10,6 +10,8 @@ import java.awt.event.ActionListener;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 public class NoughtsAndSocketsClientGUI {
     private Client client;
@@ -198,9 +200,6 @@ public class NoughtsAndSocketsClientGUI {
 
                 } else { // opponent win
                     statusHeadLabel.setText("Opponent Wins!");
-                    // Update ELO status with opponent as winner
-//                    client.sendMessageToServer('L');
-                    handleGameEndSend('L');
                 }
             } else if (isFull()) {
 //                endGame();
@@ -214,15 +213,9 @@ public class NoughtsAndSocketsClientGUI {
 
     }
 
-    public void handleQuit(){
-        statusHeadLabel.setText("You have forfeited.");
-        client.sendMessageToServer('Q');
-        System.exit(0);
-    }
-
     public void showQuitDialog() {
         String[] options = {"QUIT2", "PLAY AGAIN"};
-        int response = JOptionPane.showOptionDialog(null, statusHeadLabel.getText(), "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        int response = JOptionPane.showOptionDialog(null, statusHeadLabel.getText() + "\nNew Rank" + player.getRank(), "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
 
         if(response == 0) { // QUIT
             System.exit(0);
@@ -232,40 +225,13 @@ public class NoughtsAndSocketsClientGUI {
         }
     }
 
-    public void showEndGameDialog(char status) {
-        String[] options = {"QUIT", "PLAY AGAIN"};
-        int response = JOptionPane.showOptionDialog(null, statusHeadLabel.getText(), "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-        if (gameActive) {
-            System.out.println("1");
-            client.sendMessageToServer('Q');
-        } else{
-            System.out.println("2");
-            client.sendMessageToServer(status);
-        }
-
-        // Alter above to show updated rating
-        if (response == 0) { // PLAY AGAIN
-            System.exit(0);
-            // Handle the logic to restart the game or go back to lobby
-        } else if(response == 1) { // QUIT
-            System.exit(0);
-
-        }
-    }
-
-    public void handleOpponentQuit() {
-        statusHeadLabel.setText("Your opponent has quit.");
-        setGameActive(false);
-        showQuitDialog();
-    }
-
-
     public void handleGameEndReceive(char oppStatus){
         // Here you have received notification from the server that the game has ended
 //        handleGameEndSend();
 
         // Handle Dialog case by case (switch) according to opponent game case (ie: opponent wins)
         String message = "";
+        System.out.println("RECEIVE ");
         switch(oppStatus) {
             case 'W':
                 message = "Opponent Wins!";
@@ -277,7 +243,7 @@ public class NoughtsAndSocketsClientGUI {
                 message = "It's a draw!";
                 break;
             case 'Q':
-                message = "Opponent has quit.";
+                message = "Opponent has quit. You win!";
                 break;
         }
         statusHeadLabel.setText(message);
@@ -287,16 +253,27 @@ public class NoughtsAndSocketsClientGUI {
         showQuitDialog();
     }
 
-    public void handleGameEndSend(char Status){
+    public void handleGameEndSend(char status){
+        System.out.println("SEND");
         // Disable all features
         disableGameComponents();
         Quit.setEnabled(false);
 
+        // Update server
+        client.sendMessageToServer(status);
+
+        // Wait for 0.5 seconds
+        try {
+            Thread.sleep(500);  // Sleep for 500 milliseconds = 0.5 seconds
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         // Show quit popup
-        setGameActive(false);
-        showEndGameDialog(Status);
+        showQuitDialog();
 //        setGameActive(false);
     }
+
 
 
 
@@ -333,7 +310,18 @@ public class NoughtsAndSocketsClientGUI {
 
     public void init_components() {
         JFrame frame = new JFrame("Noughts and Sockets");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        // Window close
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                System.out.println("Window closing event triggered!"); // Debugging statement
+
+//                statusHeadLabel.setText("You quit. Opponent wins");
+                client.sendMessageToServer('Q');
+                System.exit(0);  // Close the application
+            }
+        });
         frame.setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.BOTH;
@@ -388,7 +376,12 @@ public class NoughtsAndSocketsClientGUI {
         // Quit Button
         Quit = new JButton("Quit");
 //        Quit.addActionListener(e -> System.exit(0));
-        Quit.addActionListener(e -> handleQuit());
+        Quit.addActionListener(e -> {
+            SwingUtilities.invokeLater(() -> {
+                statusHeadLabel.setText("You forfeit. Opponent wins");
+                handleGameEndSend('Q');
+            });
+        });
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridheight = 1;
