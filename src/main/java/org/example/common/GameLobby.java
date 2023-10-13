@@ -9,7 +9,7 @@ import java.util.UUID;
 public class GameLobby {
     private final ConcurrentLinkedQueue<PlayerSession> playerLobbyQueue;
     private final ConcurrentHashMap<UUID, Game> activeGames;
-    private final ConcurrentHashMap<String, Double> playerRankings ;
+    private final ConcurrentHashMap<String, Double> playerRankings;
 
 
     public GameLobby() {
@@ -36,6 +36,10 @@ public class GameLobby {
 
     public void removeFromLobbyQueue(PlayerSession playerSession) {
         playerLobbyQueue.remove(playerSession);
+    }
+
+    public void removePlayerSessionByPlayer(Player player) {
+        playerLobbyQueue.removeIf(session -> session.getPlayer().equals(player));
     }
 
     public void removeGame(Player player1, Player player2) {

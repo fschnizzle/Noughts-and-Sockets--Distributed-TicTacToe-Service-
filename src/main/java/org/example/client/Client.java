@@ -3,10 +3,8 @@ package org.example.client;
 import org.example.common.Move;
 import org.example.common.Player;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
+import java.lang.management.ManagementFactory;
 import java.net.Socket;
 import javax.swing.*;
 
@@ -63,19 +61,15 @@ public class Client {
             try {
                 processServerMessages();
             } catch (EOFException e) {
-                System.out.println("EOFException 66");
+                System.out.println("EOFException");
 //                handleConnectionLoss();
             } catch (Exception e) {
-                System.out.println("Other 69");
-                displayGenericError();
+                System.out.println("Other Exception");
+                return;
             }
         }).start();
     }
 
-
-    private void displayGenericError() {
-        System.out.println("UNKNOWN GENERIC ISSUE OCCURRED");
-    }
 
     private void processServerMessages() throws IOException, ClassNotFoundException {
         Player updatedPlayer = null;
@@ -86,20 +80,23 @@ public class Client {
             if (obj instanceof String) {
                 switch ((String) obj) {
                     case "OPPONENT_QUIT":
-                        System.out.println("receive");
                         gui.handleGameEndReceive('Q');
-//                        gui.setGameActive(false);
-//                        System.out.println("opp quit");
-//                        gui.handleGameEndReceive('0');
                         break;
-
+                    case "MATCHED":
+                        gui.setGameActive(true);
+                        break;
+                    case "CONFIRM_PLAYER_QUIT_LOBBY":
+                        // Received confirmation that the player has been removed from the lobby.
+                        System.exit(0);
+                        break;
                     default:
                         gui.receiveChatMessage((String) obj);
                 }
             }
             else if (obj instanceof Character) {
-                System.out.println(updatedPlayer.getUsername() + " received " + obj);
-                switch ((Character) obj) {
+                char status = (Character) obj;
+                switch (status) {
+                    // Technically redundant
                     case 'Q':
                         gui.handleGameEndReceive('Q');
                         break;
@@ -112,10 +109,13 @@ public class Client {
                     case 'D':
                         gui.handleGameEndReceive('D');
                         break;
+                    case 'R':
+                        newGame();
                     default:
-                        System.out.println(obj);
+                        System.out.println("Unhandled character message: " + status);
                 }
-            } else if (obj instanceof Move) {
+            }
+            else if (obj instanceof Move) {
                 processMove((Move) obj);
             } else if (obj instanceof Player) {
                 if (updatedPlayer == null) {
@@ -124,6 +124,12 @@ public class Client {
                     opponentPlayer = (Player) obj;
                     gui.startGame(updatedPlayer, opponentPlayer);
                 }
+            }
+            else if (obj instanceof Double) {
+                gui.rank = (Double) obj;
+            }
+            else {
+                System.out.println("Received unhandled object type: " + obj.getClass());
             }
         }
     }
@@ -156,6 +162,27 @@ public class Client {
         }
     }
 
+    public void restartApplication() {
+        StringBuilder cmd = new StringBuilder();
+        cmd.append(System.getProperty("java.home") + File.separator + "bin" + File.separator + "java "); // Java path
+        for (String jvmArg : ManagementFactory.getRuntimeMXBean().getInputArguments()) { // JVM arguments
+            cmd.append(jvmArg + " ");
+        }
+        cmd.append("-cp ").append(ManagementFactory.getRuntimeMXBean().getClassPath()).append(" "); // Classpath
+        cmd.append("org.example.client.Client"); // This should be replaced by your main class's full name.
+        String[] args = {username, hostname, String.valueOf(serverPort)};
+        for (String arg : args) { // Command line arguments
+            cmd.append(" ").append(arg);
+        }
+
+        try {
+            Runtime.getRuntime().exec(cmd.toString());
+            System.exit(0); // Exit current program
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public void sendMoveToServer(Move move) {
         sendToServer(move);
     }
@@ -178,14 +205,37 @@ public class Client {
     }
 
 
-    public static void main(String[] args) {
+    private static boolean shouldRestart = true;
 
+    public void newGame() {
+        this.gui = new NoughtsAndSocketsClientGUI(this);
+        connectToServer();
+    }
+
+    public static class RestartException extends RuntimeException {}
+
+
+    public static void main(String[] args) {
+        while (shouldRestart) {
+            try {
+                shouldRestart = false; // reset the flag
+                runClient(args);
+            } catch (RestartException e) {
+                System.out.println("Restarting client...");
+                shouldRestart = true; // reset the flag
+                continue;
+            }
+        }
+    }
+
+    public static void runClient(String[] args) {
         try {
             // Check for correct CL usage and arguments
             if (args.length != 3) {
                 System.out.println("Usage: java -jar Client.jar <username> <server-ip-address> <server-port>");
                 return;
             }
+
             // Update username, port, and ip based on arguments
             String username = args[0];
             String hostname = args[1];
@@ -199,4 +249,26 @@ public class Client {
             e.printStackTrace();
         }
     }
+
+//    public static void main(String[] args) {
+//
+//        try {
+//            // Check for correct CL usage and arguments
+//            if (args.length != 3) {
+//                System.out.println("Usage: java -jar Client.jar <username> <server-ip-address> <server-port>");
+//                return;
+//            }
+//            // Update username, port, and ip based on arguments
+//            String username = args[0];
+//            String hostname = args[1];
+//            int serverPort = Integer.parseInt(args[2]);
+//
+//            // Get added to player lobby queue
+//            Client client = new Client(hostname, serverPort, username);
+//            client.connectToServer();
+//
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//    }
 }

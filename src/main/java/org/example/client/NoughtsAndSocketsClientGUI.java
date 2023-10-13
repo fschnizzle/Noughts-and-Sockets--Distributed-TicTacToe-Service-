@@ -21,7 +21,11 @@ public class NoughtsAndSocketsClientGUI {
 
     public Player opponent;
 
+    public double rank = 1500;
+
     public boolean gameActive = false;
+
+    public JFrame frame;
     private Set<JButton> disabledButtons = new HashSet<>();
     public JButton[] grid = new JButton[9];
     public Color bgColor = Color.GRAY;
@@ -55,7 +59,7 @@ public class NoughtsAndSocketsClientGUI {
     }
 
     public void receiveChatMessage(String message) {
-        chatArea.append("Opponent: " + message + "\n");
+        chatArea.append(opponent.getUsername() + ": " + message + "\n");
     }
 
 
@@ -214,16 +218,41 @@ public class NoughtsAndSocketsClientGUI {
     }
 
     public void showQuitDialog() {
-        String[] options = {"QUIT2", "PLAY AGAIN"};
-        int response = JOptionPane.showOptionDialog(null, statusHeadLabel.getText() + "\nNew Rank" + player.getRank(), "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        String[] options = {"QUIT", "SHOW UPDATED RATING"};
+        String message = statusHeadLabel.getText();
+//        if (player.getRank() != rank) {
+//            message += "\nNew Rank: " + rank;
+//        }
+
+        int response = JOptionPane.showOptionDialog(null, message, "Game Over", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
 
         if(response == 0) { // QUIT
             System.exit(0);
-        } else if(response == 1) { // PLAY AGAIN
-//            System.exit(0);
+        } else if(response == 4) { // PLAY AGAIN
+            frame.dispose();
+            client.sendMessageToServer('R');
+//            throw new Client.RestartException();
+            System.exit(0);
             // Handle the logic to restart the game or go back to lobby
+        } else if(response == 1) { // SHOW UPDATED RATING
+            showUpdatedRating(); // Placeholder function. Replace with actual logic to show the rating.
         }
     }
+
+    private void showUpdatedRating() {
+        // Logic to show the updated player rating.
+        String updatedRatingMessage = "Your updated rating is: " + rank;
+        String[] options = {"Quit"};
+
+        int response = JOptionPane.showOptionDialog(null, updatedRatingMessage,
+                "Updated Rating", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+
+        if(response == 0) { // QUIT
+            System.exit(0);
+        }
+    }
+
 
     public void handleGameEndReceive(char oppStatus){
         // Here you have received notification from the server that the game has ended
@@ -231,7 +260,6 @@ public class NoughtsAndSocketsClientGUI {
 
         // Handle Dialog case by case (switch) according to opponent game case (ie: opponent wins)
         String message = "";
-        System.out.println("RECEIVE ");
         switch(oppStatus) {
             case 'W':
                 message = "Opponent Wins!";
@@ -246,6 +274,16 @@ public class NoughtsAndSocketsClientGUI {
                 message = "Opponent has quit. You win!";
                 break;
         }
+
+
+        // Wait for 0.5 seconds
+        try {
+            Thread.sleep(500);  // Sleep for 500 milliseconds = 0.5 seconds
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Message
         statusHeadLabel.setText(message);
         setGameActive(false);
 
@@ -254,7 +292,6 @@ public class NoughtsAndSocketsClientGUI {
     }
 
     public void handleGameEndSend(char status){
-        System.out.println("SEND");
         // Disable all features
         disableGameComponents();
         Quit.setEnabled(false);
@@ -295,10 +332,6 @@ public class NoughtsAndSocketsClientGUI {
                         updateBoard(move);
                         setMyTurn(false);
                         client.sendMoveToServer(move);
-                        System.out.println("Sent move to server: " + move);  // Add this
-                    } else {
-                        // TODO: Show a message or play a sound to indicate it's not the player's turn.
-                        System.out.println("NOT YOUR TURN"); //placeholder functionality
                     }
                 }
             });
@@ -309,17 +342,28 @@ public class NoughtsAndSocketsClientGUI {
 
 
     public void init_components() {
-        JFrame frame = new JFrame("Noughts and Sockets");
+        frame = new JFrame("Noughts and Sockets");
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         // Window close
         frame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                System.out.println("Window closing event triggered!"); // Debugging statement
 
-//                statusHeadLabel.setText("You quit. Opponent wins");
-                client.sendMessageToServer('Q');
-                System.exit(0);  // Close the application
+                if (gameActive) {
+                    client.sendMessageToServer('Q');
+                    System.exit(0);  // Close the application
+                } else {
+                    // Game is not active. Inform  server  player wants to leave the lobby.
+                    client.sendMessageToServer('X');
+                    try {
+                        Thread.sleep(1000);  // wait for 1 second
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                    // Exit after sending xthe quit lobby command.
+                    System.exit(0);
+                }
+
             }
         });
         frame.setLayout(new GridBagLayout());
@@ -327,7 +371,7 @@ public class NoughtsAndSocketsClientGUI {
         gbc.fill = GridBagConstraints.BOTH;
 
         // Timer Panel
-        timerLabel = new JLabel("Timer: 17", SwingConstants.CENTER); // TODO: Use actual timer value here
+        timerLabel = new JLabel("Timer: 17", SwingConstants.CENTER);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.weightx = 0.2;
@@ -335,7 +379,7 @@ public class NoughtsAndSocketsClientGUI {
         frame.add(timerLabel, gbc);
 
         // Status / Turn Info Panel
-        statusHeadLabel = new JLabel("Finding opponent...", SwingConstants.CENTER);
+        statusHeadLabel = new JLabel("Finding Player...", SwingConstants.CENTER);
         gbc.gridx = 1;
         gbc.gridy = 0;
         frame.add(statusHeadLabel, gbc);
@@ -378,8 +422,21 @@ public class NoughtsAndSocketsClientGUI {
 //        Quit.addActionListener(e -> System.exit(0));
         Quit.addActionListener(e -> {
             SwingUtilities.invokeLater(() -> {
-                statusHeadLabel.setText("You forfeit. Opponent wins");
-                handleGameEndSend('Q');
+                if (gameActive) {
+                    statusHeadLabel.setText("You forfeit. Opponent wins");
+//                    client.restartApplication();
+                    handleGameEndSend('Q');
+                } else{
+                    // Game is not active. Inform the server that player wants to leave the lobby.
+                    client.sendMessageToServer('X');
+                    try {
+                        Thread.sleep(1000);  // wait for 1 second
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                    // Exit after sending xthe quit lobby command.
+                    System.exit(0);
+                }
             });
         });
         gbc.gridx = 0;
@@ -392,7 +449,7 @@ public class NoughtsAndSocketsClientGUI {
         chatInput = new JTextField();
         chatInput.addActionListener(e -> {
             String messageToSend = chatInput.getText();
-            chatArea.append("You: " + messageToSend + "\n");
+            chatArea.append(player.getUsername() +  ": " + messageToSend + "\n");
             client.sendChatMessageToServer(messageToSend);
             chatInput.setText("");
         });

@@ -1,6 +1,7 @@
 package org.example.server;
 
 import org.example.common.GameLobby;
+import org.example.common.MatchmakingRunnable;
 import org.example.common.Player;
 
 import java.io.IOException;
@@ -17,6 +18,10 @@ public class Server {
 
     public Server() {
         this.lobby = new GameLobby();
+
+        // 2. Start the matchmaking thread as soon as the server instance is created
+        Thread matchmakingThread = new Thread(new MatchmakingRunnable(lobby));
+        matchmakingThread.start();
     }
 
     public void startServer(String IP, int port) {

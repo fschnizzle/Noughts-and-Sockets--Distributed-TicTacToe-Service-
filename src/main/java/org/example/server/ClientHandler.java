@@ -41,7 +41,7 @@ public class ClientHandler implements Runnable {
                 notifyOtherPlayerOfQuit(opponent, player, lobby.findGameByPlayer(player));
             }
         } catch (SocketException se) {
-            System.out.println("Client disconnected abruptly.");
+            System.out.println("Client disconnected ..");
             isPlayerConnected = false;
         } catch (IOException e) {
             if(clientSocket != null && clientSocket.isClosed() && player != null) {
@@ -64,7 +64,6 @@ public class ClientHandler implements Runnable {
         out = new ObjectOutputStream(clientSocket.getOutputStream());
         in = new ObjectInputStream(clientSocket.getInputStream());
     }
-
     private void handleClient() throws IOException, ClassNotFoundException, InterruptedException {
         Player player = (Player) in.readObject();
 
@@ -78,27 +77,50 @@ public class ClientHandler implements Runnable {
                 //lobby.removeFromLobbyQueue(playerSession);
             }
         }
-        else if (lobby.getPlayerRanking(player.getUsername()) != 1500) { // Returning player (not in current game) (ie: new game)
+        else if (lobby.getPlayerRanking(player.getUsername()) != 1500) {
             player.setRank(lobby.getPlayerRanking(player.getUsername()));
-            System.out.println("Client " + player.getUsername() + " (" + lobby.getPlayerRanking(player.getUsername()) + ") joins lobby");
+//            System.out.println("Client " + player.getUsername() + " (" + lobby.getPlayerRanking(player.getUsername()) + ") joins lobby");
             PlayerSession playerSession = new PlayerSession(player, out);
             lobby.addToLobbyQueue(playerSession);
-            lobby.matchPlayers();
         }
-        else { // New player joins server
-            System.out.println("Client " + player.getUsername() + " (" + lobby.getPlayerRanking(player.getUsername()) + ") joins lobby");
+        else {
+//            System.out.println("Client " + player.getUsername() + " (" + lobby.getPlayerRanking(player.getUsername()) + ") joins lobby");
             PlayerSession playerSession = new PlayerSession(player, out);
             lobby.addToLobbyQueue(playerSession);
-            lobby.matchPlayers();
         }
 
         // Connected, handle game requests
         Game gameRoom = null;
-        while (isPlayerConnected) {
-            gameRoom = getGameForPlayer(player, gameRoom);
-            Object obj = in.readObject();
+        Object obj = null;
+        // Lobby stage
+        while (isPlayerConnected && gameRoom == null) {
+            obj = in.readObject();
+
+            // Check for the 'X' character signaling the player wants to exit.
+            if (obj instanceof Character && obj.equals('X')) {
+                lobby.removePlayerSessionByPlayer(player);
+//                System.out.println(player.getUsername() + " removed from lobby.");
+                isPlayerConnected = false; // Exit the loop as the player wants to leave.
+            } else {
+                // Check if a game is available.
+                gameRoom = lobby.findGameByPlayer(player);
+            }
+        }
+
+        // Transition stage
+        if (obj != null){
+            // Handle game-related messages.
             handleReceivedObject(obj, gameRoom, player);
         }
+
+        // Game stage
+        while (isPlayerConnected && gameRoom != null) {
+            obj = in.readObject();
+            // Handle game-related messages.
+            handleReceivedObject(obj, gameRoom, player);
+
+        }
+
     }
 
     private boolean isReconnectingPlayer(Player player) {
@@ -127,9 +149,9 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleReceivedObject(Object obj, Game gameRoom, Player player) throws IOException {
-        // Before handling any object, check if the player is still connected.
+        // Before handling any object, check if  player still connected
         if (!isPlayerConnected) {
-            System.out.println("Player disconnected. Stopping current operations.");
+//            System.out.println("Player disconnected. Stopping current operations.");
             return;
         }
         if (obj instanceof Move) {
@@ -149,7 +171,6 @@ public class ClientHandler implements Runnable {
         }
     }
     private void handleCharacterMessage(Character status, Game game, Player player) {
-        System.out.println("handling character message for: " + player.getUsername());
 
         Player p1, p2;
 
@@ -164,31 +185,22 @@ public class ClientHandler implements Runnable {
             p2 = game.getPlayer1();
         }
         else {
-            System.out.println("WHAT");
             return; // If the player isn't Player1 or Player2 in the game room, we return.
         }
 
+        if (status.equals('R')){
+            ObjectOutputStream stream = game.getPlayer1Stream();
+            try {
+                isPlayerConnected = true;
+                stream.writeObject('R');
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         // Handle Game End processes
-        if (!game.isProcessed) {
+        else if (!game.isProcessed) {
             handleGameEnd(p1, p2, game, status, true);
-//            switch (status) {
-//                case 'Q':
-//                    handleGameEnd(p1, p2, game, status, true);
-//                    break;
-//                case 'W':
-//                    handleGameEnd(p1, p2, game, status, false);
-//                    break;
-//                case 'L':
-//                    handleGameEnd(p2, p1, game, status, false);
-//                    break;
-//                case 'D':
-//                    handleGameEnd(p2, p1, game, status, false);
-//                    break;
-//                case '0':
-//                    System.out.println("HERE2");
-//                    break;
-//                default:
-//                    System.out.println("Not a valid instruction: " + status);
             }
         }
 
@@ -211,12 +223,27 @@ public class ClientHandler implements Runnable {
 
     private void notifyOtherPlayerOfStatus(Player opponent, Game gameRoom, char status) {
         try {
-            System.out.println("Notifying status (from CH -> C), opponent: " + opponent.getUsername());
-
             if (opponent != null) {
                 ObjectOutputStream oppStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer1Stream() : gameRoom.getPlayer2Stream();
+                ObjectOutputStream myStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream(); // Added this line to get the other player's stream
 
                 if (oppStream != null) {
+                    // Send updated ranks for both players
+                    oppStream.writeObject(lobby.getPlayerRanking(opponent.getUsername()));
+
+                    Player opponentFromGame = getOpponentFromGame(opponent);
+                    if (opponentFromGame != null && opponentFromGame.getUsername() != null) {
+                        oppStream.writeObject(lobby.getPlayerRanking(opponent.getUsername()));
+
+                        // Send the second rank object to the other player as well
+                        if (myStream != null) {
+                            myStream.writeObject(lobby.getPlayerRanking(opponentFromGame.getUsername()));
+                            myStream.flush(); // Added flush for the other player stream
+                        }
+
+                    } else {
+                        // Handle the situation when either opponentFromGame or getUsername() is null.
+                    }
                     oppStream.writeObject(status); // Sending specific message to the client
                     oppStream.flush();
                 }
@@ -226,7 +253,6 @@ public class ClientHandler implements Runnable {
             try {
                 ObjectOutputStream loserStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream();
                 loserStream.writeObject('0');
-                System.out.println("sent");
             } catch(Exception e){
                 System.out.println("Failed to notify " + (opponent != null ? opponent.getUsername() : "the opponent") + ". They have already disconnected.");
             }
@@ -251,7 +277,6 @@ public class ClientHandler implements Runnable {
             try {
                 ObjectOutputStream loserStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream();
                 loserStream.writeObject('0');
-                System.out.println("sent");
             } catch(Exception e){
                 System.out.println("Failed to notify " + (opponent != null ? opponent.getUsername() : "the opponent") + ". They have already disconnected.");
             }
@@ -264,11 +289,9 @@ public class ClientHandler implements Runnable {
     private void sendMoveToOtherPlayer(Move move, Game gameRoom, Player player) {
         try {
             if (gameRoom.getPlayer1().equals(player)) {
-                System.out.println("Sending move to Player 2");
                 gameRoom.getPlayer2Stream().writeObject(move);
                 gameRoom.getPlayer2Stream().flush(); // Ensure the move is actually sent
             } else {
-                System.out.println("Sending move to Player 1");
                 gameRoom.getPlayer1Stream().writeObject(move);
                 gameRoom.getPlayer1Stream().flush(); // Ensure the move is actually sent
             }
@@ -280,7 +303,6 @@ public class ClientHandler implements Runnable {
 
     private void handleGameEnd(Player p1, Player p2, Game game, char status, boolean isQuit) {
         // Updates player rankings with: (winner, loser, isDraw)
-        System.out.println("handling CH game end for: " + p1.getUsername());
         // p1 = player
         // p2 = opponent
         switch (status) {
@@ -340,7 +362,7 @@ public class ClientHandler implements Runnable {
         player.setRank(rank);
         Double oldRank = lobby.getPlayerRanking(username);
         lobby.updatePlayerRankings(username, rank);
-        System.out.println(username + " " + oldRank + " -> " + lobby.getPlayerRanking(username));
+        //TODO: System.out.println(username + " " + oldRank + " -> " + lobby.getPlayerRanking(username));
     }
     private void sendChatMessageToBothPlayers(String message, Game gameRoom, Player sender) throws IOException {
         if(!gameRoom.getPlayer1().equals(sender)) {
