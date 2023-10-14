@@ -59,7 +59,7 @@ public class GameLobby {
 
             Game game = createNewGame(player1, player2);
             activeGames.put(UUID.randomUUID(), game);
-            System.out.println("Game created with " + player1.getPlayer().getUsername() + " and " + player2.getPlayer().getUsername());
+//            System.out.println("Game created with " + player1.getPlayer().getUsername() + " and " + player2.getPlayer().getUsername());
             notifyPlayersMatched(player1, player2);
         }
     }
@@ -71,7 +71,6 @@ public class GameLobby {
             sendPlayerDetails(game, player1, player2);
         } catch (IOException e) {
             e.printStackTrace();
-            // Consider adding more error handling here
         }
         return game;
     }

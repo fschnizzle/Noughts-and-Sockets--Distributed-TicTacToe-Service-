@@ -4,6 +4,9 @@ import org.example.common.Move;
 import org.example.common.Player;
 
 import javax.swing.*;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.PlainDocument;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -447,9 +450,18 @@ public class NoughtsAndSocketsClientGUI {
 
         // Chat Input
         chatInput = new JTextField();
+        chatInput.setDocument(new PlainDocument() {
+            @Override
+            public void insertString(int offs, String str, AttributeSet a) throws BadLocationException {
+                if (str != null && (getLength() + str.length() <= 20)) {
+                    super.insertString(offs, str, a);
+                }
+            }
+        });
         chatInput.addActionListener(e -> {
             String messageToSend = chatInput.getText();
-            chatArea.append(player.getUsername() +  ": " + messageToSend + "\n");
+            String formattedMessage = player.getUsername() + ": " + messageToSend + "\n";
+            chatArea.insert(formattedMessage, 0);
             client.sendChatMessageToServer(messageToSend);
             chatInput.setText("");
         });

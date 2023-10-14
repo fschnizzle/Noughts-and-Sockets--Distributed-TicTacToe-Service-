@@ -54,7 +54,7 @@ public class ClientHandler implements Runnable {
             System.out.println("CH ClassNotFoundException: Unable to recognize received object.");
         } catch (InterruptedException e) {
             System.out.println("Interrupted Exception: " + e.getMessage());
-            Thread.currentThread().interrupt(); // Best practice: re-interrupt the thread
+            Thread.currentThread().interrupt(); //  re-interrupt the thread
         } finally {
             closeConnection();
         }
@@ -96,7 +96,7 @@ public class ClientHandler implements Runnable {
         while (isPlayerConnected && gameRoom == null) {
             obj = in.readObject();
 
-            // Check for the 'X' character signaling the player wants to exit.
+            // Check for the 'X' character signaling the player wants to exit
             if (obj instanceof Character && obj.equals('X')) {
                 lobby.removePlayerSessionByPlayer(player);
 //                System.out.println(player.getUsername() + " removed from lobby.");
@@ -185,7 +185,7 @@ public class ClientHandler implements Runnable {
             p2 = game.getPlayer1();
         }
         else {
-            return; // If the player isn't Player1 or Player2 in the game room, we return.
+            return; // If the player isn't Player1 or Player2 in the game room, return.
         }
 
         if (status.equals('R')){
@@ -225,7 +225,7 @@ public class ClientHandler implements Runnable {
         try {
             if (opponent != null) {
                 ObjectOutputStream oppStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer1Stream() : gameRoom.getPlayer2Stream();
-                ObjectOutputStream myStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream(); // Added this line to get the other player's stream
+                ObjectOutputStream myStream = (opponent.equals(gameRoom.getPlayer1())) ? gameRoom.getPlayer2Stream() : gameRoom.getPlayer1Stream();
 
                 if (oppStream != null) {
                     // Send updated ranks for both players
@@ -242,7 +242,7 @@ public class ClientHandler implements Runnable {
                         }
 
                     } else {
-                        // Handle the situation when either opponentFromGame or getUsername() is null.
+                        // later: Handle the situation when either opponentFromGame or getUsername() is null.
                     }
                     oppStream.writeObject(status); // Sending specific message to the client
                     oppStream.flush();
@@ -290,10 +290,10 @@ public class ClientHandler implements Runnable {
         try {
             if (gameRoom.getPlayer1().equals(player)) {
                 gameRoom.getPlayer2Stream().writeObject(move);
-                gameRoom.getPlayer2Stream().flush(); // Ensure the move is actually sent
+                gameRoom.getPlayer2Stream().flush(); // Ensures the move is actually sent
             } else {
                 gameRoom.getPlayer1Stream().writeObject(move);
-                gameRoom.getPlayer1Stream().flush(); // Ensure the move is actually sent
+                gameRoom.getPlayer1Stream().flush(); // Ensures the move is actually sent
             }
         } catch (IOException e) {
             System.err.println("Error sending move to the other player: " + e.getMessage());
@@ -327,7 +327,7 @@ public class ClientHandler implements Runnable {
         // Alert the other player about the status change
         notifyOtherPlayerOfStatus(p2, game, status);
 
-        // Remove the game from activeGames (assuming you have a lobby instance and a method removeGame)
+        // Remove the game from activeGames
         lobby.removeGame(p1, p2);
     }
 

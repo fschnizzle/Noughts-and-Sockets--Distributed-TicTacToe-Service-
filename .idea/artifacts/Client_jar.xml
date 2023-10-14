@@ -1,0 +1,13 @@
+<component name="ArtifactManager">
+  <artifact name="Client:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Client_jar</output-path>
+    <root id="root">
+      <element id="archive" name="NAC3.jar">
+        <element id="directory" name="META-INF">
+          <element id="file-copy" path="$PROJECT_DIR$/src/main/resources/client/META-INF/MANIFEST.MF" />
+        </element>
+        <element id="module-output" name="NAC3" />
+      </element>
+    </root>
+  </artifact>
+</component>
